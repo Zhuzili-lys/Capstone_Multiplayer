@@ -11,7 +11,7 @@
 - 主工程：`C:\Users\刘雨声\My project`（Unity 6000.6.7f1，VR Multiplayer 模板工程）
 - 硬件：Meta Quest 2 ×2（同一 WiFi）；开发机 RTX 4060 Ti 8GB
 
-## 2. 已完成的资产迁移
+## 2. 已完成的资产迁移与开发场景
 
 已从队友的 `UAV_AllFeatures_v01.unitypackage` 导入到工程（保留 `.meta`，GUID 未变）：
 
@@ -25,6 +25,19 @@
 且其 `VRTemplateAssets/Scripts/XRKnob.cs`、`AnchorVisuals.cs` 与
 `Assets/VRMPAssets/Scripts/Helpers/` 下已有的同名类冲突（会报 `CS0101`）。
 它本质是另一份独立的 VR 模板工程，应单独打开。
+
+以上资产与 `HANDOFF.md` 已纳入版本控制（提交 `a777a1a`）。
+
+### 开发场景 `DroneRoom`（提交 `07f2507`、`ae9cf32`）
+
+- `Assets/Scenes/DroneRoom.unity` —— **当前开发场景**。以模板 `BasicScene` 复制而来，已含：
+  房间（`Floor` + `Wall` ×4 + `Directional Light`）、XR Origin（含双手与手菜单）、
+  `XRI Network Game Manager`、`Network Manager VR Multiplayer`、`NetworkInteractableSpawner`。
+  已放入 `Drone.prefab`（Transform Position = `(0, 1.2, 1.5)`）。
+- 构建列表顺序（`ProjectSettings/EditorBuildSettings.asset`）：
+  `DroneRoom`(0, 启用) → `SampleScene`(1, 启用) → `BasicScene`(2, 未启用)。
+  即 **`DroneRoom` 是启动场景**。
+- `Assets/Scenes/SampleScene.unity` 是模板全套示例场景，本阶段不使用，**不要删除**。
 
 ## 3. 现有代码架构（四个脚本，均为单人离线逻辑）
 
@@ -83,11 +96,17 @@ XR Interaction Toolkit 3.x。`Drone.prefab` 若报 Missing Script，多为 XRI �
   （`Edit > Project Settings > Services`，确认勾选 "Connect project to Unity Cloud"）→
   Vivox 步骤（本阶段可跳过语音）→ 完成
 - [待确认] Unity Cloud Dashboard 里 `Authentication` / `Lobby` / `Relay` 是否已 Enable
-- [待验证] 打开 **Basic scene** → Play → Join Online → 看到 **Status: Connected**
+- [已完成] 无人机资产已迁移入库；`DroneRoom` 场景已建立、入库、并设为启动场景。
+  Play 后 Hierarchy 中 `Drone` 下会出现 `DroneGeometry` 及各零件，且 `Drone` 身上多出
+  `Rigidbody` + `XRGrabInteractable`，证明 `ParametricDrone` 重建与 `MakeGrabbable()` 正常。
+- [待验证] 双人连接链路：`DroneRoom` → Play → HUD 出现 **Status: Connected**。
+  注意：`BasicScene` 的 `Join Online` 按钮走 UGS 路径且类型名已失效，**不要用它做验收**；
+  应使用 XR Origin 内手菜单里的 Lobby UI。
 
 ## 6. 实施阶段（工作分解）
 
-- **阶段 0 环境搭建**（当前）
+- **阶段 0 环境搭建**（当前）——工程、无人机资产、`DroneRoom` 场景均已就绪；
+  剩余：双人连接链路实测
 - **阶段 1 玩家化身**：网络化 XR Rig（Player Prefab 必须带 `NetworkObject`），
   头/手位姿约 10-30Hz 同步 + 远端插值，加名字标签
 - **阶段 2 共享无人机状态**：参数改为 `NetworkVariable` → 广播触发两端 `Rebuild`；
@@ -117,13 +136,29 @@ XR Interaction Toolkit 3.x。`Drone.prefab` 若报 Missing Script，多为 XRI �
 - `Multiplayer Play Mode` 可在编辑器内多开虚拟玩家，**每个虚拟玩家要给不同 Tag**，
   否则认证冲突
 - Relay / Vivox 有免费额度，按用量计费
+- 会话模式开关（DA vs LAN 直连）位于 `Assets/VRMPAssets/Prefabs/Managers/XRI Network Game Manager.prefab`
+  的 `SessionManager.m_SessionType`：`0` = DistributedAuthority（走 UGS Relay），
+  `1` = LocalOnly（走 LAN 直连，自动关闭语音、跳过认证）。
+  **模板已内置** Host / Join Local Room 的传输层、逻辑层
+  （`XRINetworkGameManager.HostLocalConnection()` / `JoinLocalConnection()`）与 UI 层，
+  **不需要另写"最小连接脚本"**。
+- 失效事件绑定（待实测）：多处 UnityEvent 仍写着旧类型名 `XRMPT.*` / `SandboxXRI.*`，
+  与现有程序集 `VRMP` 不一致，运行时会丢事件。已发现位置：`BasicScene` 的 `Connection Canvas`、
+  `Prefabs/UIPrefabs/MenuUI/LobbyUI/Lobby UI.prefab` 的部分回调、
+  `Prefabs/PrefabVariants/XR Origin Hands (XR Rig) MP Template Variant.prefab` 的 `ToggleMenu`。
+- 与本节第一条不符的实际状态：`ProjectSettings/ProjectSettings.asset` 中
+  （Android 的）Internet Access 权限仍为未设 Require，**出包前必须改**。
+- `git status` 长期显示 300+ 个模板二进制资源为已修改（LFS / 行尾规范化所致），
+  **不是代码改动，不要提交**；每次只 add 明确的目标文件。
 
 ## 9. 建议的下一步
 
-1. 完成 UGS 配置验证（Basic scene 出现 `Status: Connected`）
-2. 写最小连接脚本：Host / Client + LAN IP 输入 + 状态显示，先在 Multiplayer Play Mode 里跑通
-3. 网络化 XR 玩家化身（头 + 双手）
-4. 把 `ParametricDrone` 的 9 个设计参数 + `displayScale` 改为网络同步
+1. 验证双人连接链路（先 LAN 直连，见第 8 节会话模式开关）：两人 Play 后 HUD 出现 `Status: Connected`
+2. 网络化 XR 玩家化身（头 + 双手）——`Prefabs/PlayerPrefabs/` 已提供带 `NetworkObject` 的网络化身
+   预制体，优先复用而非新建
+3. 把 `ParametricDrone` 的 9 个设计参数 + `displayScale` 改为网络同步（两端各自 `Rebuild`）
+
+> 原第 2 项「写最小连接脚本」已作废：模板已内置 Host / Join Local Room 全套能力，重复实现没有意义。
 
 ## 10. 协作偏好
 
