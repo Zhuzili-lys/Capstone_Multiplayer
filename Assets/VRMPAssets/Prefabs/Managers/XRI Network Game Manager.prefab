@@ -61,7 +61,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4fc9ddf205bd8784da3ae5681e15741d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_DefaultMaxPlayers: 20
   m_SessionType: 0
   hideEditorFromLobby: 0
 --- !u!114 &3763782728091630267
