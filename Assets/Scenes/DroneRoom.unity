@@ -439,8 +439,12 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1471418133301936582, guid: a3c19c3f5ab404ffba01ed05c3558b0d, type: 3}
     - target: {fileID: 3574915620247463832, guid: 07f5a5a8f9e3f0e4bb51dd532e6afb40, type: 3}
+      propertyPath: m_InScenePlaced
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3574915620247463832, guid: 07f5a5a8f9e3f0e4bb51dd532e6afb40, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 3655534662
+      value: 822079279
       objectReference: {fileID: 0}
     - target: {fileID: 3754441934053033095, guid: 07f5a5a8f9e3f0e4bb51dd532e6afb40, type: 3}
       propertyPath: m_Name
@@ -1056,6 +1060,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4293411706908256769, guid: 77ac6b10722bcca4a8baf70e44d89e78, type: 3}
       propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4314720978076346651, guid: 77ac6b10722bcca4a8baf70e44d89e78, type: 3}
+      propertyPath: m_ActiveFontFeatures.Array.size
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5187516752444087277, guid: 77ac6b10722bcca4a8baf70e44d89e78, type: 3}
@@ -2798,6 +2806,22 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5312913048170041519, guid: d6f2f14133a0448aeb6f72bcf0179142, type: 3}
+      propertyPath: m_InScenePlaced
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312913048170041519, guid: d6f2f14133a0448aeb6f72bcf0179142, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 2959532871
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312913048170041519, guid: d6f2f14133a0448aeb6f72bcf0179142, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5312913048170041519, guid: d6f2f14133a0448aeb6f72bcf0179142, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 2036625479
+      objectReference: {fileID: 0}
     - target: {fileID: 8448601359382687060, guid: d6f2f14133a0448aeb6f72bcf0179142, type: 3}
       propertyPath: m_Name
       value: Drone
@@ -2820,8 +2844,12 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2453000488347674689, guid: b712a032f4efb4b6c8fddf73d10bd7e7, type: 3}
     - target: {fileID: 3574915620247463832, guid: 07f5a5a8f9e3f0e4bb51dd532e6afb40, type: 3}
+      propertyPath: m_InScenePlaced
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3574915620247463832, guid: 07f5a5a8f9e3f0e4bb51dd532e6afb40, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 3910671111
+      value: 2140225342
       objectReference: {fileID: 0}
     - target: {fileID: 3754441934053033095, guid: 07f5a5a8f9e3f0e4bb51dd532e6afb40, type: 3}
       propertyPath: m_Name

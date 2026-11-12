@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -13,11 +15,16 @@ using UnityEngine.InputSystem;
 /// Laptop simulator keys: T = trigger, 1 = primary (A).
 /// For the left controller hold Shift (Shift+T, Shift+1).
 ///
+/// Multiplayer: which parts are hidden is shared through a NetworkList (by part name), so hiding a
+/// part hides it for everyone. Any player may hide/restore; the request is forwarded to the drone's
+/// owner, which owns the list. Hover highlight, the selection ray and the current selection stay
+/// local, because they are private to the hand that is pointing.
+///
 /// Usage: add to the same GameObject as ParametricDrone. The controllers are found
 /// automatically by name ("Right Controller" / "Left Controller") if the fields are
 /// left empty; drag them in manually only if your rig uses different names.
 /// </summary>
-public class DronePartSelector : MonoBehaviour
+public class DronePartSelector : NetworkBehaviour
 {
     [Tooltip("The right controller transform (XR Origin > Camera Offset > Right Controller).")]
     public Transform rayOrigin;
@@ -46,6 +53,12 @@ public class DronePartSelector : MonoBehaviour
     Transform selected;
     readonly List<Transform> hiddenParts = new List<Transform>();
     MaterialPropertyBlock block;
+
+    /// <summary>Names of the parts hidden from every player. Written by the drone's owner, read by everyone.</summary>
+    readonly NetworkList<FixedString64Bytes> m_HiddenParts = new NetworkList<FixedString64Bytes>(
+        default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+    bool hiddenDirty;   // the shared list changed and the visuals need re-applying
 
     void OnEnable()
     {
@@ -112,6 +125,19 @@ public class DronePartSelector : MonoBehaviour
         }
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        m_HiddenParts.OnListChanged += OnHiddenPartsChanged;
+        hiddenDirty = true;   // the shared list may not be empty; apply it on the next Update
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        m_HiddenParts.OnListChanged -= OnHiddenPartsChanged;
+        base.OnNetworkDespawn();
+    }
+
     static Hand MakeHand(string name, string usage)
     {
         var h = new Hand
@@ -127,6 +153,12 @@ public class DronePartSelector : MonoBehaviour
 
     void Update()
     {
+        if (hiddenDirty)
+        {
+            hiddenDirty = false;
+            ApplyHiddenState();
+        }
+
         if (right.aim != null) Process(right, right.aim);
         if (left.aim != null) Process(left, left.aim);
     }
@@ -192,26 +224,93 @@ public class DronePartSelector : MonoBehaviour
 
     void Hide(Transform part)
     {
-        part.GetComponent<Renderer>().enabled = false;
-        part.GetComponent<Collider>().enabled = false;
-        part.GetComponent<Renderer>().SetPropertyBlock(null);
-        hiddenParts.Add(part);
+        if (part == null) return;
+
+        if (selected == part) selected = null;
         if (right.hovered == part) right.hovered = null;
         if (left.hovered == part) left.hovered = null;
-        selected = null;
-        Debug.Log($"Hid {part.name}");
+
+        if (!IsSpawned)
+        {
+            // No network running: hide it here, like the single-player original.
+            SetVisible(part, false);
+            hiddenParts.Add(part);
+            Debug.Log($"Hid {part.name}");
+            return;
+        }
+
+        // The hidden list belongs to the drone's owner; forward the request if we are not it.
+        if (IsOwner) AddHidden(part.name);
+        else RequestHideRpc(part.name);
     }
 
     void ShowAll()
     {
-        foreach (var p in hiddenParts)
+        selected = null;
+
+        if (!IsSpawned)
         {
-            if (p == null) continue;
-            p.GetComponent<Renderer>().enabled = true;
-            p.GetComponent<Collider>().enabled = true;
+            SetAllVisible();
+            return;
         }
+
+        if (IsOwner) m_HiddenParts.Clear();
+        else RequestShowAllRpc();
+    }
+
+    [Rpc(SendTo.Owner)]
+    void RequestHideRpc(string partName) => AddHidden(partName);
+
+    [Rpc(SendTo.Owner)]
+    void RequestShowAllRpc() => m_HiddenParts.Clear();
+
+    void AddHidden(string partName)
+    {
+        FixedString64Bytes name = partName;
+        if (!m_HiddenParts.Contains(name)) m_HiddenParts.Add(name);
+    }
+
+    void OnHiddenPartsChanged(NetworkListEvent<FixedString64Bytes> changeEvent) => hiddenDirty = true;
+
+    void SetAllVisible()
+    {
         hiddenParts.Clear();
+        foreach (var r in GetComponentsInChildren<Renderer>(true)) SetVisible(r.transform, true);
         Debug.Log("Showing all parts");
+    }
+
+    /// <summary>Hides exactly the parts in the shared list and shows every other part.</summary>
+    void ApplyHiddenState()
+    {
+        hiddenParts.Clear();
+        foreach (var r in GetComponentsInChildren<Renderer>(true))
+        {
+            Transform t = r.transform;
+            bool hidden = IsHidden(t.name);
+            SetVisible(t, !hidden);
+            if (hidden) hiddenParts.Add(t);
+        }
+        Debug.Log($"Hidden parts synced ({hiddenParts.Count} hidden)");
+    }
+
+    bool IsHidden(string partName)
+    {
+        foreach (var h in m_HiddenParts)
+            if (h.ToString() == partName) return true;
+        return false;
+    }
+
+    static void SetVisible(Transform part, bool visible)
+    {
+        var r = part.GetComponent<Renderer>();
+        if (r != null)
+        {
+            if (!visible) r.SetPropertyBlock(null);   // drop the highlight before hiding
+            r.enabled = visible;
+        }
+
+        var c = part.GetComponent<Collider>();
+        if (c != null) c.enabled = visible;
     }
 
     // Selected = cyan, hovered by either hand = yellow, otherwise normal colour

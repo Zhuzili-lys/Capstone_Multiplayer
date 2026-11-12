@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -12,10 +13,15 @@ using UnityEngine.InputSystem;
 ///   B or Y button (secondary, either controller) -> explode / collapse (animated)
 ///   Laptop simulator: 2 (right) or Shift+2 (left)
 ///
+/// Multiplayer: the exploded/collapsed state is shared through a NetworkVariable, so every
+/// player sees the same view. Any player may press the button; the request is forwarded to the
+/// drone's owner, who publishes the new state. The animation itself (the "factor") is played
+/// locally on each client, so no geometry is sent over the network.
+///
 /// Usage: add to the same GameObject as ParametricDrone. Works on any model whose
 /// parts are separate child objects (e.g. an imported CAD assembly) too.
 /// </summary>
-public class ExplodedView : MonoBehaviour
+public class ExplodedView : NetworkBehaviour
 {
     [Tooltip("How far parts move apart. 1 = double their distance from the centre.")]
     [Range(0.2f, 4f)] public float spread = 1.5f;
@@ -30,7 +36,12 @@ public class ExplodedView : MonoBehaviour
     class Part { public Transform t; public Vector3 basePos; public Vector3 offset; }
     readonly List<Part> parts = new List<Part>();
     float factor;           // 0 = assembled, 1 = fully exploded
+    bool needCapture;       // scheduled a Capture once the drone geometry exists
     ParametricDrone drone;
+
+    /// <summary>Shared exploded state. Written by the drone's owner, read by everyone.</summary>
+    readonly NetworkVariable<bool> m_Exploded = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
     void OnEnable()
     {
@@ -53,21 +64,58 @@ public class ExplodedView : MonoBehaviour
         if (drone != null) drone.Rebuilt -= Capture;
     }
 
-    void Update()
+    public override void OnNetworkSpawn()
     {
-        if (toggleInput.action.WasPressedThisFrame()) Toggle();
+        base.OnNetworkSpawn();
+        m_Exploded.OnValueChanged += OnExplodedChanged;
+        SetExploded(m_Exploded.Value);   // catch up with the shared state
     }
 
-    /// <summary>Also callable from a UI button.</summary>
+    public override void OnNetworkDespawn()
+    {
+        m_Exploded.OnValueChanged -= OnExplodedChanged;
+        base.OnNetworkDespawn();
+    }
+
+    void Update()
+    {
+        if (toggleInput.action != null && toggleInput.action.WasPressedThisFrame()) Toggle();
+    }
+
+    /// <summary>Explode / collapse. Also callable from a UI button.</summary>
     public void Toggle()
     {
-        exploded = !exploded;
-        if (exploded && factor == 0f) Capture();
+        if (!IsSpawned)
+        {
+            SetExploded(!exploded);          // no network running: behave like the single-player original
+            return;
+        }
+
+        if (IsOwner) m_Exploded.Value = !m_Exploded.Value;   // the owner publishes the new state
+        else RequestToggleRpc();                             // everyone else asks the owner
+    }
+
+    [Rpc(SendTo.Owner)]
+    void RequestToggleRpc() => m_Exploded.Value = !m_Exploded.Value;
+
+    void OnExplodedChanged(bool previous, bool current) => SetExploded(current);
+
+    void SetExploded(bool value)
+    {
+        exploded = value;
+        if (exploded && factor == 0f) needCapture = true;    // measure once the parts exist
+        else if (!exploded) needCapture = false;
         Debug.Log(exploded ? "Exploding" : "Collapsing");
     }
 
     void LateUpdate()
     {
+        if (needCapture)
+        {
+            Capture();
+            if (parts.Count > 0) needCapture = false;
+        }
+
         float target = exploded ? 1f : 0f;
         if (parts.Count == 0 || (factor == 0f && target == 0f)) return; // assembled: leave parts alone
 
