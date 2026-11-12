@@ -9,6 +9,7 @@
 - 目标：双人 VR 协同空间，两名设计师远程同时查看/修改同一架参数化无人机
 - 当前阶段：单人原型已完成 → 正在做多人化（网络同步）
 - 主工程：`C:\Users\刘雨声\My project`（Unity 6000.6.7f1，VR Multiplayer 模板工程）
+- 远端仓库：`https://github.com/Zhuzili-lys/Capstone_Multiplayer.git`（分支 `main`）
 - 硬件：Meta Quest 2 ×2（同一 WiFi）；开发机 RTX 4060 Ti 8GB
 
 ## 2. 已完成的资产迁移与开发场景
@@ -30,14 +31,28 @@
 
 ### 开发场景 `DroneRoom`（提交 `07f2507`、`ae9cf32`）
 
-- `Assets/Scenes/DroneRoom.unity` —— **当前开发场景**。以模板 `BasicScene` 复制而来，已含：
-  房间（`Floor` + `Wall` ×4 + `Directional Light`）、XR Origin（含双手与手菜单）、
-  `XRI Network Game Manager`、`Network Manager VR Multiplayer`、`NetworkInteractableSpawner`。
-  已放入 `Drone.prefab`（Transform Position = `(0, 1.2, 1.5)`）。
-- 构建列表顺序（`ProjectSettings/EditorBuildSettings.asset`）：
-  `DroneRoom`(0, 启用) → `SampleScene`(1, 启用) → `BasicScene`(2, 未启用)。
-  即 **`DroneRoom` 是启动场景**。
-- `Assets/Scenes/SampleScene.unity` 是模板全套示例场景，本阶段不使用，**不要删除**。
+- `Assets/Scenes/DroneRoom.unity` —— **当前开发场景**（原以模板 `BasicScene` 复制而来，
+  该源场景已删除）。已含：房间（`Floor` + `Wall` ×4 + `Directional Light`）、
+  XR Origin（含双手与手菜单）、`XRI Network Game Manager`、`Network Manager VR Multiplayer`、
+  `NetworkInteractableSpawner`。已放入 `Drone.prefab`（Transform Position = `(0, 1.2, 1.5)`）。
+- 构建列表（`ProjectSettings/EditorBuildSettings.asset`）**只保留一条**：
+  `DroneRoom`(0, 启用)。即 **`DroneRoom` 是当前唯一的构建场景，也是启动场景**。
+
+### 已删除的模板示例场景
+
+模板示例场景 `SampleScene.unity` 与 `BasicScene.unity` **已删除**（连同 `.meta`），
+构建列表对应条目同步移除。删除前已查证：
+
+- 这两个场景的 guid 在整个工程内**只出现在 `EditorBuildSettings.asset`**，无其他引用；
+- `DroneRoom` 不引用它们；场景文件不参与 C# 编译，删除**对编译与运行无影响**。
+
+**保留未删的两处（勿动）**：
+
+- `Assets/Scenes/SampleScene/` 目录（Lightmap / ReflectionProbe / OcclusionCullingData 等烘焙数据）。
+  `DroneRoom.unity` 第 12 行的 `m_OcclusionCullingData` 仍指向其中的 `OcclusionCullingData.asset`。
+- 原本只被这两个场景引用的模板资产（`Assets/VRMPAssets/MiniGames/`、`Sandbox` 玩具等，约 51 项）
+  现为无人引用的冗余文件。**留着无害，不要删**——`DroneRoom` 的直接依赖有 25/26 个仍在
+  `VRMPAssets/` 下，且 `DroneRoom` 的按钮引用着 `Assets/Samples/` 里的 `TextButton.prefab`。
 
 ## 3. 现有代码架构（四个脚本，均为单人离线逻辑）
 
@@ -100,7 +115,8 @@ XR Interaction Toolkit 3.x。`Drone.prefab` 若报 Missing Script，多为 XRI �
   Play 后 Hierarchy 中 `Drone` 下会出现 `DroneGeometry` 及各零件，且 `Drone` 身上多出
   `Rigidbody` + `XRGrabInteractable`，证明 `ParametricDrone` 重建与 `MakeGrabbable()` 正常。
 - [待验证] 双人连接链路：`DroneRoom` → Play → HUD 出现 **Status: Connected**。
-  注意：`BasicScene` 的 `Join Online` 按钮走 UGS 路径且类型名已失效，**不要用它做验收**；
+  注意：`DroneRoom` 的 `Connection Canvas`（从 `BasicScene` 复制而来，源场景已删除）中的
+  `Join Online` 按钮走 UGS 路径且回调类型名已失效，**不要用它做验收**；
   应使用 XR Origin 内手菜单里的 Lobby UI。
 
 ## 6. 实施阶段（工作分解）
@@ -143,9 +159,11 @@ XR Interaction Toolkit 3.x。`Drone.prefab` 若报 Missing Script，多为 XRI �
   （`XRINetworkGameManager.HostLocalConnection()` / `JoinLocalConnection()`）与 UI 层，
   **不需要另写"最小连接脚本"**。
 - 失效事件绑定（待实测）：多处 UnityEvent 仍写着旧类型名 `XRMPT.*` / `SandboxXRI.*`，
-  与现有程序集 `VRMP` 不一致，运行时会丢事件。已发现位置：`BasicScene` 的 `Connection Canvas`、
+  与现有程序集 `VRMP` 不一致，运行时会丢事件。已发现位置：`DroneRoom` 的 `Connection Canvas`、
   `Prefabs/UIPrefabs/MenuUI/LobbyUI/Lobby UI.prefab` 的部分回调、
   `Prefabs/PrefabVariants/XR Origin Hands (XR Rig) MP Template Variant.prefab` 的 `ToggleMenu`。
+- `SampleScene.unity` / `BasicScene.unity` 已删除（见第 2 节），其烘焙数据目录保留。
+  删除时须**完全退出 Unity**再改 `EditorBuildSettings.asset`，否则编辑器退出时会把内存中的旧列表写回。
 - 与本节第一条不符的实际状态：`ProjectSettings/ProjectSettings.asset` 中
   （Android 的）Internet Access 权限仍为未设 Require，**出包前必须改**。
 - `git status` 长期显示 300+ 个模板二进制资源为已修改（LFS / 行尾规范化所致），
